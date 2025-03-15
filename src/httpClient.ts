@@ -8,12 +8,24 @@ type QueueTask = {
     reject: (reason?: any) => void;
 };
 
+/**
+ * OptimizedHttpClient is a class that manages HTTP requests with optimizations
+ * such as deduplication of identical requests and limiting the number of concurrent
+ * requests to a specific host.
+ */
 class OptimizedHttpClient {
-    // Now we store promise of parsed data (e.g. JSON) instead of a Response
+    // Stores promises of parsed data for in-flight requests
     private inFlightRequests: Map<string, Promise<any>> = new Map();
+    // Manages queues for requests to each host
     private requestQueue: Map<string, async.QueueObject<QueueTask>> = new Map();
+    // Maximum number of concurrent requests allowed per host
     private MAX_CONCURRENT_REQUESTS = 3;
 
+    /**
+     * Extracts the host key from a given URL.
+     * @param url - The URL from which to extract the host.
+     * @returns The host part of the URL.
+     */
     private getHostKey(url: string): string {
         const { host } = new URL(url);  // If invalid, URL() will throw 
         return host;
@@ -23,6 +35,13 @@ class OptimizedHttpClient {
         console.log("[INFO] HTTP Client Initialized with async.queue");
     }
 
+    /**
+     * Fetches data from a given URL with optimizations such as deduplication
+     * and rate limiting.
+     * @param url - The URL to fetch data from.
+     * @param options - Optional request options.
+     * @returns A promise that resolves with the parsed data.
+     */
     async fetchWithOptimization(url: string, options: RequestInit = {}): Promise<any> {
         const urlString = url;
 
@@ -51,11 +70,11 @@ class OptimizedHttpClient {
                         throw new Error(`HTTP Error: ${response.status}`);
                     }
 
-                    // *** Parse the response body here
+                    // Parse the response body here
                     const data = await response.json();
 
                     console.log(`[DEBUG] Request successful: ${task.url}`);
-                    // *** Resolve each Task with the parsed JSON
+                    // Resolve each Task with the parsed JSON
                     task.resolve(data);
                 } catch (error) {
                     console.error(`[ERROR] Request failed: ${task.url}`, error);
@@ -79,7 +98,7 @@ class OptimizedHttpClient {
         // Return a promise that gets resolved when the task is executed
         // but store the "in flight" promise for reuse
         return new Promise<any>((outerResolve, outerReject) => {
-            // 1) Create the inner promise that goes onto the queue
+            // Create the inner promise that goes onto the queue
             const queuePromise = new Promise<any>((innerResolve, innerReject) => {
                 this.requestQueue.get(hostKey)!.push({
                     url: urlString,
@@ -89,10 +108,10 @@ class OptimizedHttpClient {
                 });
             });
 
-            // 2) Store that inner promise in the map
+            // Store that inner promise in the map
             this.inFlightRequests.set(urlString, queuePromise);
 
-            // 3) When the inner promise finishes, settle the outer promise
+            // When the inner promise finishes, settle the outer promise
             queuePromise
                 .then((parsedData) => outerResolve(parsedData))
                 .catch((error) => outerReject(error));

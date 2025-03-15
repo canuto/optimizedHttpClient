@@ -93,7 +93,7 @@ describe("Integration Tests", () => {
             });
         });
 
-        const results = await Promise.all(promises);
+        await Promise.all(promises);
 
         // Calculate time differences to check for queuing
         const thirdFourthDiff = endTimes[3] - endTimes[2];
