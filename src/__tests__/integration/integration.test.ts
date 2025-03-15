@@ -80,24 +80,19 @@ describe("Integration Tests", () => {
             `${BASE_URL}?test=6`
         ];
 
-        const startTimes: number[] = [];
-        const endTimes: number[] = [];
-
         console.log("[INFO] Sending 6 requests; only 3 should be in-flight at once.");
 
-        const promises = urls.map((url, index) => {
-            startTimes[index] = Date.now();
-            return httpClient.fetchWithOptimization(url).then(result => {
-                endTimes[index] = Date.now();
-                return result;
-            });
+        const results = await Promise.all(urls.map(url => httpClient.fetchWithOptimization(url)));
+
+        // Extract x-callstart headers and convert to timestamps
+        const callStartTimes = results.map((data: HttpBinData) => {
+            const callStart = data.headers['X-Callstart'];
+            return callStart ? new Date(callStart).getTime() : 0;
         });
 
-        await Promise.all(promises);
-
         // Calculate time differences to check for queuing
-        const thirdFourthDiff = endTimes[3] - endTimes[2];
-        const firstSecondDiff = endTimes[1] - endTimes[0];
+        const thirdFourthDiff = callStartTimes[3] - callStartTimes[2];
+        const firstSecondDiff = callStartTimes[1] - callStartTimes[0];
 
         console.log(`[DEBUG] Time difference between first and second request: ${firstSecondDiff}ms`);
         console.log(`[DEBUG] Time difference between third and fourth request: ${thirdFourthDiff}ms`);

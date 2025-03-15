@@ -1,5 +1,17 @@
 import async from "async";
 import fetch, { RequestInit as NodeFetchRequestInit } from "node-fetch";
+import log from 'loglevel';
+import { LogLevelDesc } from 'loglevel';
+
+// Set the default log level
+const validLogLevels: LogLevelDesc[] = ['trace', 'debug', 'info', 'warn', 'error', 'silent'];
+const logLevel = process.env.LOG_LEVEL as LogLevelDesc;
+
+if (validLogLevels.includes(logLevel)) {
+    log.setLevel(logLevel);
+} else {
+    log.setLevel('debug');
+}
 
 type QueueTask = {
     url: string;
@@ -32,7 +44,7 @@ class OptimizedHttpClient {
     }
 
     constructor() {
-        console.log("[INFO] HTTP Client Initialized with async.queue");
+        log.info("[INFO] HTTP Client Initialized with async.queue");
     }
 
     /**
@@ -52,7 +64,7 @@ class OptimizedHttpClient {
 
         // Check if an identical call is already ongoing
         if (this.inFlightRequests.has(urlString)) {
-            console.log(`[DEBUG] Reusing existing call: ${urlString}`);
+            log.debug(`[DEBUG] Reusing existing call: ${urlString}`);
             // Return the *same* promise containing parsed data
             return this.inFlightRequests.get(urlString)!;
         }
@@ -63,7 +75,15 @@ class OptimizedHttpClient {
         if (!this.requestQueue.has(hostKey)) {
             const queue = async.queue(async (task: QueueTask, callback) => {
                 try {
-                    console.log(`[DEBUG] Starting request: ${task.url}`);
+                    log.debug(`[DEBUG] Starting request: ${task.url}`);
+
+                    // Set the timestamp when the request actually starts processing
+                    const headers = { ...task.options.headers };
+                    task.options.headers = {
+                        ...headers,
+                        'x-callstart': new Date().toISOString()
+                    };
+
                     const response = await fetch(task.url, task.options);
 
                     if (!response.ok) {
@@ -73,23 +93,23 @@ class OptimizedHttpClient {
                     // Parse the response body here
                     const data = await response.json();
 
-                    console.log(`[DEBUG] Request successful: ${task.url}`);
+                    log.debug(`[DEBUG] Request successful: ${task.url}`);
                     // Resolve each Task with the parsed JSON
                     task.resolve(data);
                 } catch (error) {
-                    console.error(`[ERROR] Request failed: ${task.url}`, error);
+                    log.error(`[ERROR] Request failed: ${task.url}`, error);
                     task.reject(error);
                 } finally {
                     // Clean up
                     this.inFlightRequests.delete(task.url);
                     callback();
-                    console.log(`[DEBUG] Task completed: ${task.url}`);
+                    log.debug(`[DEBUG] Task completed: ${task.url}`);
                 }
             }, this.MAX_CONCURRENT_REQUESTS);
 
             // Drain event
             queue.drain(() => {
-                console.log(`[INFO] All tasks have been processed for host: ${hostKey}`);
+                log.info(`[INFO] All tasks have been processed for host: ${hostKey}`);
             });
 
             this.requestQueue.set(hostKey, queue);

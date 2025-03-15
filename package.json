@@ -13,6 +13,7 @@
   "dependencies": {
     "async": "^3.2.6",
     "dotenv": "^16.4.7",
+    "loglevel": "^1.9.2",
     "node-fetch": "^2.7.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.2"
