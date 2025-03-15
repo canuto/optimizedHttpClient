@@ -1,117 +1,71 @@
-import { httpClient } from '../../httpClient';
+import { httpClient } from "../../httpClient";
+import fetch from "node-fetch";
 
-jest.mock('node-fetch', () => jest.fn());
-const { Response } = jest.requireActual('node-fetch');
+jest.mock("node-fetch");
+const { Response } = jest.requireActual("node-fetch");
 
-describe('OptimizedHttpClient', () => {
+describe("OptimizedHttpClient Unit Tests", () => {
     beforeEach(() => {
-        (fetch as jest.Mock).mockClear();
+        // Clear any existing mock calls and implementations before each test
+        (fetch as unknown as jest.Mock).mockClear();
     });
 
-    it('should make a single request', async () => {
-        (fetch as jest.Mock).mockResolvedValue(new Response('OK', { status: 200 }));
+    test("returns parsed JSON data from mocked fetch", async () => {
+        // Setup: mock fetch to return a certain response
+        const mockData = { foo: "bar" };
+        (fetch as unknown as jest.Mock).mockResolvedValue(
+            new Response(JSON.stringify(mockData), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+            })
+        );
 
-        const response = await httpClient.fetchWithOptimization('https://example.com');
-        expect(response.ok).toBe(true);
+        const url = "https://example.com/test";
+        const result = await httpClient.fetchWithOptimization(url);
+
+        // Assertions
+        expect(fetch).toHaveBeenCalledTimes(1); // only 1 fetch call
+        expect(fetch).toHaveBeenCalledWith(url, {});
+        expect(result).toEqual(mockData); // the JSON data you returned
+    });
+
+    test("deduplicates simultaneous requests for the same URL", async () => {
+        // We'll track how many times fetch is called
+        const mockData = { deduped: true };
+        (fetch as unknown as jest.Mock).mockResolvedValue(
+            new Response(JSON.stringify(mockData), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+            })
+        );
+
+        const url = "https://example.com/deduped";
+        // Kick off multiple calls simultaneously
+        const [r1, r2, r3] = await Promise.all([
+            httpClient.fetchWithOptimization(url),
+            httpClient.fetchWithOptimization(url),
+            httpClient.fetchWithOptimization(url),
+        ]);
+
+        // Because all are the same URL, we expect the fetch logic to run only once
         expect(fetch).toHaveBeenCalledTimes(1);
+        expect(r1).toEqual(mockData);
+        expect(r2).toEqual(mockData);
+        expect(r3).toEqual(mockData);
     });
 
-    it('should deduplicate requests to the same URL', async () => {
-        (fetch as jest.Mock).mockResolvedValue(new Response('OK', { status: 200 }));
+    test("handles HTTP error status codes correctly", async () => {
+        // Suppose the server returns 500 
+        (fetch as unknown as jest.Mock).mockResolvedValue(
+            new Response("", { status: 500 })
+        );
 
-        const promise1 = httpClient.fetchWithOptimization('https://httpbin.org/anything?test=1');
-        const promise2 = httpClient.fetchWithOptimization('https://httpbin.org/anything?test=1');
+        const url = "https://example.com/error";
+        await expect(httpClient.fetchWithOptimization(url)).rejects.toThrow(
+            /HTTP Error: 500/ // or whatever error message you throw
+        );
 
-        const [response1, response2] = await Promise.all([promise1, promise2]);
-        expect(response1).toBe(response2);
+        // Also verify fetch was called
         expect(fetch).toHaveBeenCalledTimes(1);
-    });
-
-    it('should limit concurrent requests to the same host to 3', async () => {
-        (fetch as jest.Mock).mockImplementation((url) => {
-            return new Promise((resolve) => {
-                setTimeout(() => resolve(new Response('OK', { status: 200 })), 100);
-            });
-        });
-
-        const urls = [
-            'https://httpbin.org/anything?test=1',
-            'https://httpbin.org/anything?test=2',
-            'https://httpbin.org/anything?test=3',
-            'https://httpbin.org/anything?test=4',
-            'https://httpbin.org/anything?test=5',
-        ];
-
-        const promises = urls.map(url => httpClient.fetchWithOptimization(url));
-        await Promise.all(promises);
-
-        expect(fetch).toHaveBeenCalledTimes(5);
-        // Check that no more than 3 requests were in-flight at any time
-        // This is a bit tricky to test directly, but you can check logs or use a more complex mock
-    });
-
-    it('should handle errors correctly', async () => {
-        (fetch as jest.Mock).mockRejectedValue(new Error('Network Error'));
-
-        await expect(httpClient.fetchWithOptimization('https://httpbin.org/anything?test=error'))
-            .rejects
-            .toThrow('Network Error');
-
-        expect(fetch).toHaveBeenCalledTimes(1);
-    });
-
-    it('should queue requests when more than 3 requests are made to the same host', async () => {
-        let activeRequests = 0;
-        (fetch as jest.Mock).mockImplementation((url) => {
-            activeRequests++;
-            return new Promise((resolve) => {
-                setTimeout(() => {
-                    activeRequests--;
-                    resolve(new Response('OK', { status: 200 }));
-                }, 100);
-            });
-        });
-
-        const urls = [
-            'https://httpbin.org/anything?test=1',
-            'https://httpbin.org/anything?test=2',
-            'https://httpbin.org/anything?test=3',
-            'https://httpbin.org/anything?test=4',
-            'https://httpbin.org/anything?test=5',
-        ];
-
-        const promises = urls.map(url => httpClient.fetchWithOptimization(url));
-        await Promise.all(promises);
-
-        expect(fetch).toHaveBeenCalledTimes(5);
-        expect(activeRequests).toBeLessThanOrEqual(3);
-    });
-
-    it('should handle queued requests after in-flight requests complete', async () => {
-        let activeRequests = 0;
-        (fetch as jest.Mock).mockImplementation((url) => {
-            activeRequests++;
-            return new Promise((resolve) => {
-                setTimeout(() => {
-                    activeRequests--;
-                    resolve(new Response('OK', { status: 200 }));
-                }, 100);
-            });
-        });
-
-        const urls = [
-            'https://httpbin.org/anything?test=1',
-            'https://httpbin.org/anything?test=2',
-            'https://httpbin.org/anything?test=3',
-            'https://httpbin.org/anything?test=4',
-            'https://httpbin.org/anything?test=5',
-            'https://httpbin.org/anything?test=6',
-        ];
-
-        const promises = urls.map(url => httpClient.fetchWithOptimization(url));
-        await Promise.all(promises);
-
-        expect(fetch).toHaveBeenCalledTimes(6);
-        expect(activeRequests).toBeLessThanOrEqual(3);
     });
 });

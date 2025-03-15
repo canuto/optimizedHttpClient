@@ -1,10 +1,10 @@
 import async from "async";
+import fetch, { RequestInit as NodeFetchRequestInit } from "node-fetch";
 
-// Define a type alias for the task object
 type QueueTask = {
     url: string;
-    options: RequestInit;
-    resolve: (value: any) => void;   // Return parsed data, not Response
+    options: NodeFetchRequestInit;
+    resolve: (value: any) => void;
     reject: (reason?: any) => void;
 };
 
@@ -25,6 +25,11 @@ class OptimizedHttpClient {
 
     async fetchWithOptimization(url: string, options: RequestInit = {}): Promise<any> {
         const urlString = url;
+
+        // Ensure the body is undefined if it's null
+        if (options.body === null) {
+            options.body = undefined;
+        }
 
         // Check if an identical call is already ongoing
         if (this.inFlightRequests.has(urlString)) {
@@ -78,7 +83,7 @@ class OptimizedHttpClient {
             const queuePromise = new Promise<any>((innerResolve, innerReject) => {
                 this.requestQueue.get(hostKey)!.push({
                     url: urlString,
-                    options,
+                    options: options as NodeFetchRequestInit,
                     resolve: innerResolve,
                     reject: innerReject,
                 });
