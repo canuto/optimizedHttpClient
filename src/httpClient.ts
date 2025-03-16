@@ -26,12 +26,21 @@ type QueueTask = {
  * requests to a specific host.
  */
 class OptimizedHttpClient {
-    // Stores promises of parsed data for in-flight requests
+    private static instance: OptimizedHttpClient;
     private inFlightRequests: Map<string, Promise<any>> = new Map();
-    // Manages queues for requests to each host
     private requestQueue: Map<string, async.QueueObject<QueueTask>> = new Map();
-    // Maximum number of concurrent requests allowed per host
     private MAX_CONCURRENT_REQUESTS = 3;
+
+    private constructor() {
+        log.info("[INFO] HTTP Client Initialized with async.queue");
+    }
+
+    public static getInstance(): OptimizedHttpClient {
+        if (!OptimizedHttpClient.instance) {
+            OptimizedHttpClient.instance = new OptimizedHttpClient();
+        }
+        return OptimizedHttpClient.instance;
+    }
 
     /**
      * Extracts the host key from a given URL.
@@ -41,10 +50,6 @@ class OptimizedHttpClient {
     private getHostKey(url: string): string {
         const { host } = new URL(url);  // If invalid, URL() will throw 
         return host;
-    }
-
-    constructor() {
-        log.info("[INFO] HTTP Client Initialized with async.queue");
     }
 
     /**
@@ -139,4 +144,5 @@ class OptimizedHttpClient {
     }
 }
 
-export const httpClient = new OptimizedHttpClient();
+// Export the singleton instance
+export const httpClient = OptimizedHttpClient.getInstance();
