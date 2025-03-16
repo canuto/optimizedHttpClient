@@ -86,11 +86,25 @@ The `OptimizedHttpClient` is designed to handle various forms of load efficientl
 
 - **No Authentication Handling**: While you can pass authentication headers in the request options, the client does not provide built-in support for handling authentication flows.
 
-### Use of the Queue and the Promise Handling Mechanism
+## Testing
+
+The `OptimizedHttpClient` includes both unit and integration tests to ensure its functionality. To run the unit tests, use the following command:
+
+```bash
+npm test
+```
+
+To run the integration tests, use the following command:
+
+```bash
+npm run test:integration
+```
+
+### For the curious: Use of the Queue and the Promise Handling Mechanism
 
 The client uses a sophisticated inner/outer promise pattern to manage request deduplication and cleanup:
 
-![Inner/Outer Promise Pattern](inner-outer-promise.png)
+![Inner/Outer Promise Pattern](architecture/inner-outer-promise.png)
 
 1. **Request Deduplication**
 
@@ -108,20 +122,6 @@ The client uses a sophisticated inner/outer promise pattern to manage request de
    - The outer promise provides a clean interface to callers
    - Error handling is isolated, preventing issues with one request from affecting others
    - This pattern maintains reliability when handling multiple concurrent requests
-
-## Testing
-
-The `OptimizedHttpClient` includes both unit and integration tests to ensure its functionality. To run the unit tests, use the following command:
-
-```bash
-npm test
-```
-
-To run the integration tests, use the following command:
-
-```bash
-npm run test:integration
-```
 
 ## Contributing
 
