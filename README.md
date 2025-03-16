@@ -86,6 +86,29 @@ The `OptimizedHttpClient` is designed to handle various forms of load efficientl
 
 - **No Authentication Handling**: While you can pass authentication headers in the request options, the client does not provide built-in support for handling authentication flows.
 
+### Use of the Queue and the Promise Handling Mechanism
+
+The client uses a sophisticated inner/outer promise pattern to manage request deduplication and cleanup:
+
+![Inner/Outer Promise Pattern](inner-outer-promise.png)
+
+1. **Request Deduplication**
+
+   - An inner promise is stored in a map of in-flight requests
+   - Duplicate requests reuse this stored promise instead of creating new queue entries
+   - This ensures identical concurrent requests share the same underlying network call
+
+2. **Proper Cleanup**
+
+   - The inner promise is resolved/rejected when the actual network request completes
+   - Cleanup of in-flight requests happens in the queue worker's finally block
+   - This ensures proper resource management regardless of request success or failure
+
+3. **Promise Chain Isolation**
+   - The outer promise provides a clean interface to callers
+   - Error handling is isolated, preventing issues with one request from affecting others
+   - This pattern maintains reliability when handling multiple concurrent requests
+
 ## Testing
 
 The `OptimizedHttpClient` includes both unit and integration tests to ensure its functionality. To run the unit tests, use the following command:

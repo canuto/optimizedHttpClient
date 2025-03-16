@@ -1,0 +1,39 @@
+@startuml inner-outer-promise
+participant Client
+participant OptimizedHttpClient
+participant RequestMap
+participant RequestQueue
+participant Server
+
+== New Request ==
+Client -> OptimizedHttpClient: fetchWithOptimization(url)
+OptimizedHttpClient -> RequestMap: check for existing request
+alt Request exists in map
+    RequestMap --> OptimizedHttpClient: return existing promise
+    OptimizedHttpClient --> Client: share existing promise
+else New request
+    OptimizedHttpClient -> RequestMap: store new inner promise
+    OptimizedHttpClient -> RequestQueue: enqueue request
+    activate RequestQueue
+
+    alt Under concurrency limit
+        RequestQueue -> Server: fetch(url)
+        Server --> RequestQueue: response
+        RequestQueue -> RequestMap: resolve inner promise
+        deactivate RequestQueue
+    else Over concurrency limit
+        RequestQueue -> RequestQueue: wait for slot
+        RequestQueue -> Server: fetch(url)
+        Server --> RequestQueue: response
+        RequestQueue -> RequestMap: resolve inner promise
+        deactivate RequestQueue
+    end
+
+    RequestMap --> OptimizedHttpClient: inner promise
+    OptimizedHttpClient --> Client: outer promise
+end
+
+== Cleanup ==
+RequestQueue -> RequestMap: remove from map\n(in finally block)
+
+@enduml
